@@ -55,15 +55,13 @@ data class NewItemResult(
 @Composable
 fun AddItemDialog(
     onConfirm: (NewItemResult) -> Unit,
-    onDismiss: () -> Unit,
-    // Código já lido pelo "Escanear código" do botão + (vem preenchido no diálogo)
-    initialBarcode: String? = null
+    onDismiss: () -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var priceText by remember { mutableStateOf("") }
     var quantityText by remember { mutableStateOf("1") }
     var imageUri by remember { mutableStateOf<Uri?>(null) }
-    var barcode by remember { mutableStateOf(initialBarcode) }
+    var barcode by remember { mutableStateOf<String?>(null) }
 
     // Categoria: o app sugere pelo nome até a pessoa escolher um chip por conta própria
     var category by remember { mutableStateOf(Category.OUTROS) }
