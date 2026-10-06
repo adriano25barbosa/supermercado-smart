@@ -1,10 +1,12 @@
 package com.example.supermercadosmart.pdf
 
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.graphics.Paint
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
+import android.widget.Toast
 import androidx.core.content.FileProvider
 import com.example.supermercadosmart.data.Category
 import com.example.supermercadosmart.data.Item
@@ -19,13 +21,46 @@ import java.util.Locale
 /**
  * Gera um PDF estilo "nota de compras" com todos os itens agrupados por categoria,
  * status (no carrinho ou não)
- * e o total geral, e invoca a folha de compartilhamento nativa do Android.
+ * e o total geral. Pode abrir num leitor de PDF ([open]) ou na folha de
+ * compartilhamento nativa do Android ([exportAndShare]).
  */
 object PdfExporter {
 
     private val currencyFormat = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
 
+    /** Gera o PDF e abre a tela de compartilhar do Android. */
     fun exportAndShare(context: Context, items: List<Item>) {
+        val uri = buildPdf(context, items)
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "application/pdf"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(shareIntent, "Compartilhar lista de compras"))
+    }
+
+    /** Gera o PDF e abre num leitor de PDF do celular (se não houver, cai no compartilhar). */
+    fun open(context: Context, items: List<Item>) {
+        val uri = buildPdf(context, items)
+        val viewIntent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/pdf")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        try {
+            context.startActivity(viewIntent)
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(context, "Nenhum leitor de PDF encontrado. Escolha um app para abrir.", Toast.LENGTH_LONG).show()
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/pdf"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(shareIntent, "Abrir lista de compras"))
+        }
+    }
+
+    /** Desenha o PDF no cache do app e devolve o endereço (Uri) para abrir ou compartilhar. */
+    private fun buildPdf(context: Context, items: List<Item>): Uri {
         val pdfDocument = PdfDocument()
         val pageWidth = 595
         val pageHeight = 842
@@ -145,18 +180,10 @@ object PdfExporter {
             pdfDocument.close()
         }
 
-        val uri: Uri = FileProvider.getUriForFile(
+        return FileProvider.getUriForFile(
             context,
             "${context.packageName}.fileprovider",
             file
         )
-
-        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "application/pdf"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-
-        context.startActivity(Intent.createChooser(shareIntent, "Compartilhar lista de compras"))
     }
 }
