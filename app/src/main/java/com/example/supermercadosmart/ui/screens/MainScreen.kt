@@ -376,7 +376,8 @@ fun MainScreen(
                 showAddDialog = false
                 scannedBarcode = null
             },
-            initialBarcode = scannedBarcode
+            initialBarcode = scannedBarcode,
+            onLookupBarcode = { code -> viewModel.lookupBarcode(code) }
         )
     }
 

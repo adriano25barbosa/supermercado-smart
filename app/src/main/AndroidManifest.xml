@@ -3,6 +3,8 @@
 
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Fase 8: busca do produto pelo código de barras no Open Food Facts -->
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-feature
         android:name="android.hardware.camera.any"
         android:required="false" />

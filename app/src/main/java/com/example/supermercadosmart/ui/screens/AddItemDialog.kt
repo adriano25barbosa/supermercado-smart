@@ -19,8 +19,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddAPhoto
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -29,12 +33,14 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -42,6 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import coil.compose.rememberAsyncImagePainter
 import com.example.supermercadosmart.data.Category
+import com.example.supermercadosmart.data.LookupResult
+import com.example.supermercadosmart.data.LookupSource
 
 data class NewItemResult(
     val name: String,
@@ -57,7 +65,9 @@ fun AddItemDialog(
     onConfirm: (NewItemResult) -> Unit,
     onDismiss: () -> Unit,
     // Código já lido pelo "Escanear código" do botão + (vem preenchido no diálogo)
-    initialBarcode: String? = null
+    initialBarcode: String? = null,
+    // Busca nome/foto/categoria pelo código (listas do app e Open Food Facts); null = não busca
+    onLookupBarcode: (suspend (String) -> LookupResult)? = null
 ) {
     var name by remember { mutableStateOf("") }
     var priceText by remember { mutableStateOf("") }
@@ -68,6 +78,41 @@ fun AddItemDialog(
     // Categoria: o app sugere pelo nome até a pessoa escolher um chip por conta própria
     var category by remember { mutableStateOf(Category.OUTROS) }
     var categoryChosenByUser by remember { mutableStateOf(false) }
+
+    // Busca pelo código: o que o app preencheu sozinho pode ser trocado por uma nova leitura;
+    // o que a pessoa digitou/fotografou nunca é sobrescrito
+    var lookupState by remember { mutableStateOf<LookupUiState>(LookupUiState.Idle) }
+    var lookupAttempt by remember { mutableStateOf(0) }
+    var autoFilledName by remember { mutableStateOf<String?>(null) }
+    var autoFilledImage by remember { mutableStateOf<Uri?>(null) }
+
+    LaunchedEffect(barcode, lookupAttempt) {
+        val code = barcode
+        if (code == null || onLookupBarcode == null) return@LaunchedEffect
+        lookupState = LookupUiState.Loading
+        val result = onLookupBarcode(code)
+        lookupState = when (result) {
+            is LookupResult.Found -> {
+                val foundName = result.name
+                if (!foundName.isNullOrBlank() && (name.isBlank() || name == autoFilledName)) {
+                    name = foundName
+                    autoFilledName = foundName
+                    if (!categoryChosenByUser) category = result.category ?: Category.guess(foundName)
+                } else if (result.category != null && !categoryChosenByUser && name.isBlank()) {
+                    category = result.category
+                }
+                val foundImage = result.imageUri
+                if (foundImage != null && (imageUri == null || imageUri == autoFilledImage)) {
+                    val uri = Uri.parse(foundImage)
+                    imageUri = uri
+                    autoFilledImage = uri
+                }
+                LookupUiState.Found(result.source)
+            }
+            LookupResult.NotFound -> LookupUiState.NotFound
+            LookupResult.Failed -> LookupUiState.Failed
+        }
+    }
 
     var showPhotoDialog by remember { mutableStateOf(false) }
     var showBarcodeDialog by remember { mutableStateOf(false) }
@@ -193,6 +238,11 @@ fun AddItemDialog(
                 )
             }
 
+            LookupStatus(
+                state = lookupState,
+                onRetry = { lookupAttempt++ }
+            )
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -239,6 +289,90 @@ fun AddItemDialog(
                 showBarcodeDialog = false
             },
             onDismiss = { showBarcodeDialog = false }
+        )
+    }
+}
+
+/** Situação da busca pelo código de barras, mostrada logo abaixo do botão do código. */
+private sealed class LookupUiState {
+    object Idle : LookupUiState()
+    object Loading : LookupUiState()
+    data class Found(val source: LookupSource) : LookupUiState()
+    object NotFound : LookupUiState()
+    object Failed : LookupUiState()
+}
+
+@Composable
+private fun LookupStatus(state: LookupUiState, onRetry: () -> Unit) {
+    when (state) {
+        LookupUiState.Idle -> Unit
+        LookupUiState.Loading -> Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(16.dp),
+                strokeWidth = 2.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                "Buscando produto…",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 8.dp)
+            )
+        }
+        is LookupUiState.Found -> LookupMessage(
+            icon = Icons.Default.CheckCircle,
+            text = when (state.source) {
+                LookupSource.MY_LISTS -> "Encontrado nas suas listas"
+                LookupSource.OPEN_FOOD_FACTS -> "Encontrado no Open Food Facts"
+            },
+            tint = MaterialTheme.colorScheme.primary
+        )
+        LookupUiState.NotFound -> LookupMessage(
+            icon = Icons.Outlined.Info,
+            text = "Produto não encontrado, digite o nome",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        LookupUiState.Failed -> Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                LookupMessage(
+                    icon = Icons.Default.CloudOff,
+                    text = "Sem internet",
+                    tint = MaterialTheme.colorScheme.error
+                )
+            }
+            TextButton(onClick = onRetry, modifier = Modifier.padding(top = 4.dp)) {
+                Text("Tentar de novo")
+            }
+        }
+    }
+}
+
+@Composable
+private fun LookupMessage(
+    icon: ImageVector,
+    text: String,
+    tint: androidx.compose.ui.graphics.Color
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 8.dp)
         )
     }
 }

@@ -10,6 +10,8 @@ import com.example.supermercadosmart.data.Item
 import com.example.supermercadosmart.data.ItemRepository
 import com.example.supermercadosmart.data.ListContent
 import com.example.supermercadosmart.data.ListSummary
+import com.example.supermercadosmart.data.LookupResult
+import com.example.supermercadosmart.data.ProductLookup
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,6 +28,7 @@ import kotlinx.coroutines.launch
 class ShoppingViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = ItemRepository(AppDatabase.getInstance(application))
+    private val productLookup = ProductLookup(application, repository)
 
     // ---- Tela "Minhas listas" ----
 
@@ -175,4 +178,7 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
     suspend fun findItemByBarcode(barcode: String): Item? {
         return repository.findByBarcode(barcode)
     }
+
+    /** Nome, foto e categoria pelo código de barras: primeiro nas listas, depois no Open Food Facts. */
+    suspend fun lookupBarcode(barcode: String): LookupResult = productLookup.lookup(barcode)
 }
