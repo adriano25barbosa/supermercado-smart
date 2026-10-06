@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -33,6 +34,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import coil.compose.rememberAsyncImagePainter
@@ -59,7 +62,9 @@ fun AddItemDialog(
     var showPhotoDialog by remember { mutableStateOf(false) }
     var showBarcodeDialog by remember { mutableStateOf(false) }
 
-    val isValid = name.isNotBlank() && (priceText.toDoubleOrNull() ?: -1.0) >= 0.0
+    // O preço aparece com vírgula (ex: 5,99) e é convertido para número na hora de usar
+    val price = priceText.replace(',', '.').toDoubleOrNull()
+    val isValid = name.isNotBlank() && (price ?: -1.0) >= 0.0
 
     Dialog(onDismissRequest = onDismiss) {
         Column(
@@ -117,17 +122,33 @@ fun AddItemDialog(
             ) {
                 OutlinedTextField(
                     value = priceText,
-                    onValueChange = { priceText = it.filter { c -> c.isDigit() || c == '.' || c == ',' }.replace(',', '.') },
+                    onValueChange = { input ->
+                        // Só números e uma vírgula
+                        val cleaned = input
+                            .filter { c -> c.isDigit() || c == '.' || c == ',' }
+                            .replace('.', ',')
+                        if (cleaned.count { it == ',' } <= 1) priceText = cleaned
+                    },
                     label = { Text("Preço (R$)") },
                     modifier = Modifier.weight(1f),
-                    singleLine = true
+                    singleLine = true,
+                    // Teclado numérico com vírgula
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Next
+                    )
                 )
                 OutlinedTextField(
                     value = quantityText,
                     onValueChange = { quantityText = it.filter { c -> c.isDigit() } },
                     label = { Text("Qtd.") },
                     modifier = Modifier.weight(0.6f),
-                    singleLine = true
+                    singleLine = true,
+                    // Teclado só de números
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    )
                 )
             }
 
@@ -155,12 +176,11 @@ fun AddItemDialog(
                 }
                 Button(
                     onClick = {
-                        val price = priceText.toDoubleOrNull() ?: 0.0
                         val qty = quantityText.toIntOrNull()?.coerceAtLeast(1) ?: 1
                         onConfirm(
                             NewItemResult(
                                 name = name.trim(),
-                                unitPrice = price,
+                                unitPrice = price ?: 0.0,
                                 quantity = qty,
                                 imageUri = imageUri?.toString(),
                                 barcode = barcode

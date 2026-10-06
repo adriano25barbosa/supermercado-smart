@@ -18,3 +18,6 @@ bin/
 # Sistema
 .DS_Store
 Thumbs.db
+
+# Arquivos enviados pelo Claude (não vão para o GitHub)
+Claude outputs/
