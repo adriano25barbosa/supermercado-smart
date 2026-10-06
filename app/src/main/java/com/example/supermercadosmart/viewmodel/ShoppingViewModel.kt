@@ -76,6 +76,13 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    /** Desfazer exclusão: reinsere o item com o mesmo id e os mesmos dados. */
+    fun restoreItem(item: Item) {
+        viewModelScope.launch {
+            repository.insert(item)
+        }
+    }
+
     fun clearAllItems() {
         viewModelScope.launch {
             repository.clearAll()

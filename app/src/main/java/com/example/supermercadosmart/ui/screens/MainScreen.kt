@@ -1,6 +1,10 @@
 package com.example.supermercadosmart.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,12 +14,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -27,16 +37,25 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.supermercadosmart.data.Item
 import com.example.supermercadosmart.pdf.PdfExporter
 import com.example.supermercadosmart.viewmodel.ShoppingViewModel
 import kotlinx.coroutines.launch
+import java.text.NumberFormat
+import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+private val headerCurrency = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun MainScreen(viewModel: ShoppingViewModel) {
     val context = LocalContext.current
@@ -45,6 +64,14 @@ fun MainScreen(viewModel: ShoppingViewModel) {
 
     var showAddDialog by remember { mutableStateOf(false) }
     var showBudgetDialog by remember { mutableStateOf(false) }
+
+    // Duas seções: "A comprar" e "No carrinho" (recolhível, começa aberta)
+    val toBuyItems = shoppingItems.filter { !it.inCart }
+    val inCartItems = shoppingItems.filter { it.inCart }
+    var cartExpanded by rememberSaveable { mutableStateOf(true) }
+
+    // Barra "Desfazer" no rodapé
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // Topo que encolhe: o card vira uma faixa compacta quando a lista é rolada
     val listState = rememberLazyListState()
@@ -57,6 +84,50 @@ fun MainScreen(viewModel: ShoppingViewModel) {
                 if (index > 0 || offset > 24) budgetCollapsed = true
                 else if (offset == 0) budgetCollapsed = false
             }
+    }
+
+    fun showUndo(message: String, onUndo: () -> Unit) {
+        scope.launch {
+            snackbarHostState.currentSnackbarData?.dismiss()
+            val result = snackbarHostState.showSnackbar(
+                message = message,
+                actionLabel = "Desfazer",
+                duration = SnackbarDuration.Short
+            )
+            if (result == SnackbarResult.ActionPerformed) onUndo()
+        }
+    }
+
+    val ShoppingItem: @Composable (Item, Modifier) -> Unit = { item, itemModifier ->
+        ItemRow(
+            item = item,
+            onToggleInCart = { viewModel.toggleInCart(item) },
+            onIncrement = {
+                viewModel.updateItem(item.copy(quantity = item.quantity + 1))
+            },
+            onDecrement = {
+                if (item.quantity > 1) {
+                    viewModel.updateItem(item.copy(quantity = item.quantity - 1))
+                }
+            },
+            onSwipeToggleInCart = {
+                val wasInCart = item.inCart
+                viewModel.toggleInCart(item)
+                showUndo(
+                    if (wasInCart) "\"${item.name}\" voltou para a lista"
+                    else "\"${item.name}\" no carrinho"
+                ) {
+                    // volta só o "no carrinho", mantendo o que mais tiver mudado no item
+                    val current = viewModel.allItems.value.find { it.id == item.id } ?: item
+                    viewModel.updateItem(current.copy(inCart = wasInCart))
+                }
+            },
+            onSwipeDelete = {
+                viewModel.deleteItem(item)
+                showUndo("\"${item.name}\" removido") { viewModel.restoreItem(item) }
+            },
+            modifier = itemModifier
+        )
     }
 
     Scaffold(
@@ -84,6 +155,7 @@ fun MainScreen(viewModel: ShoppingViewModel) {
                 Icon(Icons.Default.Add, contentDescription = "Adicionar produto")
             }
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
         Column(
@@ -110,7 +182,7 @@ fun MainScreen(viewModel: ShoppingViewModel) {
                         "Sua lista está vazia.\nToque no botão + para adicionar produtos.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        textAlign = TextAlign.Center
                     )
                 }
             } else {
@@ -118,20 +190,53 @@ fun MainScreen(viewModel: ShoppingViewModel) {
                     state = listState,
                     contentPadding = PaddingValues(bottom = 96.dp)
                 ) {
-                    items(shoppingItems, key = { it.id }) { item ->
-                        ItemRow(
-                            item = item,
-                            onToggleInCart = { viewModel.toggleInCart(item) },
-                            onIncrement = {
-                                viewModel.updateItem(item.copy(quantity = item.quantity + 1))
-                            },
-                            onDecrement = {
-                                if (item.quantity > 1) {
-                                    viewModel.updateItem(item.copy(quantity = item.quantity - 1))
-                                }
-                            },
-                            onDelete = { viewModel.deleteItem(item) }
-                        )
+                    if (toBuyItems.isNotEmpty()) {
+                        item(key = "header_to_buy") {
+                            SectionHeader(
+                                title = "A comprar",
+                                count = toBuyItems.size,
+                                total = toBuyItems.sumOf { it.totalPrice },
+                                modifier = Modifier.animateItemPlacement()
+                            )
+                        }
+                    } else {
+                        item(key = "all_in_cart") {
+                            Text(
+                                "Tudo no carrinho!",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 12.dp)
+                                    .animateItemPlacement(),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+
+                    items(toBuyItems, key = { it.id }) { item ->
+                        ShoppingItem(item, Modifier.animateItemPlacement())
+                    }
+
+                    if (inCartItems.isNotEmpty()) {
+                        item(key = "header_in_cart") {
+                            SectionHeader(
+                                title = "No carrinho",
+                                count = inCartItems.size,
+                                total = inCartItems.sumOf { it.totalPrice },
+                                expanded = cartExpanded,
+                                onClick = { cartExpanded = !cartExpanded },
+                                modifier = Modifier
+                                    .padding(top = 8.dp)
+                                    .animateItemPlacement()
+                            )
+                        }
+                        if (cartExpanded) {
+                            items(inCartItems, key = { it.id }) { item ->
+                                ShoppingItem(item, Modifier.animateItemPlacement())
+                            }
+                        }
                     }
                 }
             }
@@ -166,3 +271,46 @@ fun MainScreen(viewModel: ShoppingViewModel) {
     }
 }
 
+
+/** Cabeçalho de seção: "A comprar · 3 itens · R$ 25,90". Com [onClick], vira recolhível. */
+@Composable
+private fun SectionHeader(
+    title: String,
+    count: Int,
+    total: Double,
+    modifier: Modifier = Modifier,
+    expanded: Boolean? = null,
+    onClick: (() -> Unit)? = null
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            "$title ($count)",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.weight(1f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Text(
+            headerCurrency.format(total),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.SemiBold
+        )
+        if (expanded != null) {
+            Icon(
+                imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                contentDescription = if (expanded) "Recolher" else "Expandir",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+        }
+    }
+}
