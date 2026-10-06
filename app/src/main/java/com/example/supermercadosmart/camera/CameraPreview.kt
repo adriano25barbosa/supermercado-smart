@@ -24,12 +24,14 @@ import java.util.concurrent.Executors
 /**
  * Preview de câmera reutilizável, usado tanto para captura de foto
  * quanto para leitura de código de barras (via barcodeAnalyzer opcional).
+ * Se a câmera falhar ao iniciar, avisa quem chamou pelo onError.
  */
 @Composable
 fun CameraPreview(
     modifier: Modifier = Modifier,
     onImageCaptureReady: (ImageCapture) -> Unit = {},
-    barcodeAnalyzer: BarcodeAnalyzer? = null
+    barcodeAnalyzer: BarcodeAnalyzer? = null,
+    onError: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -73,6 +75,7 @@ fun CameraPreview(
                     }
                 } catch (e: Exception) {
                     Log.e("CameraPreview", "Falha ao iniciar câmera: ${e.message}")
+                    onError(e.message ?: "Falha ao iniciar a câmera")
                 }
             }, ContextCompat.getMainExecutor(ctx))
 

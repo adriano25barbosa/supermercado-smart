@@ -75,20 +75,18 @@ fun BarcodeScannerDialog(
                     .background(Color.Black, RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                try {
-                    CameraPreview(
-                        modifier = Modifier.fillMaxWidth(),
-                        barcodeAnalyzer = analyzer
-                    )
-                    Icon(
-                        Icons.Default.QrCodeScanner,
-                        contentDescription = null,
-                        tint = Color.White.copy(alpha = 0.5f),
-                        modifier = Modifier.padding(48.dp)
-                    )
-                } catch (e: Exception) {
-                    errorMessage = "Câmera indisponível neste dispositivo."
-                }
+                // Erros da câmera chegam pelo onError (o Compose não permite try/catch aqui)
+                CameraPreview(
+                    modifier = Modifier.fillMaxWidth(),
+                    barcodeAnalyzer = analyzer,
+                    onError = { errorMessage = "Câmera indisponível neste dispositivo." }
+                )
+                Icon(
+                    Icons.Default.QrCodeScanner,
+                    contentDescription = null,
+                    tint = Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier.padding(48.dp)
+                )
             }
 
             Text(

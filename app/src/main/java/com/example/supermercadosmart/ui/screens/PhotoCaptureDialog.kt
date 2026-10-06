@@ -75,14 +75,12 @@ fun PhotoCaptureDialog(
                     .background(Color.Black, RoundedCornerShape(16.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                try {
-                    CameraPreview(
-                        modifier = Modifier.fillMaxWidth(),
-                        onImageCaptureReady = { capture -> imageCapture = capture }
-                    )
-                } catch (e: Exception) {
-                    errorMessage = "Câmera indisponível neste dispositivo."
-                }
+                // Erros da câmera chegam pelo onError (o Compose não permite try/catch aqui)
+                CameraPreview(
+                    modifier = Modifier.fillMaxWidth(),
+                    onImageCaptureReady = { capture -> imageCapture = capture },
+                    onError = { errorMessage = "Câmera indisponível neste dispositivo." }
+                )
 
                 if (errorMessage != null) {
                     Text(
