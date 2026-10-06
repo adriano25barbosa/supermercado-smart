@@ -1,82 +1,105 @@
 package com.example.supermercadosmart.ui.theme
 
-import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.unit.sp
-import androidx.core.view.WindowCompat
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.graphics.Color
 
+// Todas as cores do Material 3 definidas (as que ficam de fora caem no lilás padrão do Material)
 private val LightColors = lightColorScheme(
     primary = ForestGreen,
     onPrimary = CardWhite,
     primaryContainer = SageLight,
     onPrimaryContainer = ForestGreen,
+    inversePrimary = Sage,
     secondary = ForestGreenLight,
+    onSecondary = CardWhite,
+    secondaryContainer = SageLight,
+    onSecondaryContainer = ForestGreen,
+    tertiary = Color(0xFF8A6A1F),
+    onTertiary = CardWhite,
+    tertiaryContainer = Color(0xFFF5E3B3),
+    onTertiaryContainer = Color(0xFF3A2C05),
     background = WarmSand,
     onBackground = TextDark,
     surface = CardWhite,
     onSurface = TextDark,
+    surfaceVariant = WarmSandDark,
+    onSurfaceVariant = Color(0xFF5B6660),
+    surfaceTint = ForestGreen,
+    inverseSurface = Color(0xFF2A332D),
+    inverseOnSurface = Color(0xFFEEF3EF),
     error = AlertRed,
-    errorContainer = AlertRedLight
+    onError = CardWhite,
+    errorContainer = AlertRedLight,
+    onErrorContainer = Color(0xFF7A1219),
+    outline = Color(0xFF8A958E),
+    outlineVariant = Color(0xFFD9D2C3),
+    surfaceBright = CardWhite,
+    surfaceDim = Color(0xFFE3DBCB),
+    surfaceContainerLowest = CardWhite,
+    surfaceContainerLow = Color(0xFFFBF7F0),
+    surfaceContainer = Color(0xFFF7F2E9),
+    surfaceContainerHigh = Color(0xFFF3EDE2),
+    surfaceContainerHighest = Color(0xFFEDE6D8)
 )
 
 private val DarkColors = darkColorScheme(
     primary = Sage,
-    onPrimary = ForestGreen,
-    primaryContainer = ForestGreenLight,
+    onPrimary = Color(0xFF0B2A1C),
+    primaryContainer = NightCartContainer,
     onPrimaryContainer = SageLight,
-    secondary = SageLight,
-    background = Color0F(),
-    onBackground = CardWhite,
-    surface = Color1A(),
-    onSurface = CardWhite,
-    error = AlertRed,
-    errorContainer = AlertRedLight
+    inversePrimary = ForestGreenLight,
+    secondary = Color(0xFFA9CBB6),
+    onSecondary = Color(0xFF0B2A1C),
+    secondaryContainer = Color(0xFF2A4536),
+    onSecondaryContainer = SageLight,
+    tertiary = SandAccent,
+    onTertiary = Color(0xFF3A2C05),
+    tertiaryContainer = Color(0xFF574316),
+    onTertiaryContainer = Color(0xFFF5E3B3),
+    background = NightBackground,
+    onBackground = NightOnSurface,
+    surface = NightSurface,
+    onSurface = NightOnSurface,
+    surfaceVariant = NightSurfaceVariant,
+    onSurfaceVariant = NightOnSurfaceMuted,
+    surfaceTint = Sage,
+    inverseSurface = NightOnSurface,
+    inverseOnSurface = Color(0xFF1B2620),
+    error = AlertRedBright,
+    onError = Color(0xFF4A0A10),
+    errorContainer = Color(0xFF5C1A20),
+    onErrorContainer = AlertRedLight,
+    outline = NightOutline,
+    outlineVariant = Color(0xFF34433A),
+    surfaceBright = Color(0xFF33413A),
+    surfaceDim = NightBackground,
+    surfaceContainerLowest = Color(0xFF0A110D),
+    surfaceContainerLow = Color(0xFF131D17),
+    surfaceContainer = Color(0xFF18241D),
+    surfaceContainerHigh = Color(0xFF1F2C24),
+    surfaceContainerHighest = Color(0xFF27352D)
 )
 
-// pequenos helpers para evitar import direto de valores mágicos em dark theme
-private fun Color0F() = androidx.compose.ui.graphics.Color(0xFF121212)
-private fun Color1A() = androidx.compose.ui.graphics.Color(0xFF1E1E1E)
-
-val AppTypography = Typography(
-    headlineLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 28.sp),
-    headlineMedium = TextStyle(fontWeight = FontWeight.Bold, fontSize = 22.sp),
-    titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 20.sp),
-    titleMedium = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
-    bodyLarge = TextStyle(fontWeight = FontWeight.Normal, fontSize = 16.sp),
-    bodyMedium = TextStyle(fontWeight = FontWeight.Normal, fontSize = 14.sp),
-    labelLarge = TextStyle(fontWeight = FontWeight.Medium, fontSize = 14.sp)
-)
+/** Se o tema escuro está ativo (para desenhos e detalhes que não vêm do esquema de cores). */
+val LocalDarkTheme = staticCompositionLocalOf { false }
 
 @Composable
 fun SupermercadoSmartTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColors else LightColors
-    val view = LocalView.current
-    if (!view.isInEditMode) {
-        val context = LocalContext.current
-        val window = (context as? Activity)?.window
-        if (window != null) {
-            window.statusBarColor = colorScheme.primary.toArgb()
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
-        }
+    // As barras do sistema são ajustadas na MainActivity (enableEdgeToEdge), conforme o tema
+    CompositionLocalProvider(LocalDarkTheme provides darkTheme) {
+        MaterialTheme(
+            colorScheme = if (darkTheme) DarkColors else LightColors,
+            typography = AppTypography,
+            content = content
+        )
     }
-
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = AppTypography,
-        content = content
-    )
 }

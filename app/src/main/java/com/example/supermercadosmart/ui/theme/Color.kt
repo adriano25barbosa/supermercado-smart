@@ -17,3 +17,12 @@ val SuccessGreen = Color(0xFF40916C)
 val TextDark = Color(0xFF1B1B1B)
 val TextMuted = Color(0xFF6B7280)
 val CardWhite = Color(0xFFFFFFFF)
+
+// Modo escuro "Gourmet Fresh": verdes bem escuros no lugar do cinza, sálvia nos destaques
+val NightBackground = Color(0xFF0E1612)
+val NightSurface = Color(0xFF16211B)
+val NightSurfaceVariant = Color(0xFF24312A)
+val NightCartContainer = Color(0xFF24432F)
+val NightOnSurface = Color(0xFFE3EAE5)
+val NightOnSurfaceMuted = Color(0xFFB5C4BA)
+val NightOutline = Color(0xFF6F8277)

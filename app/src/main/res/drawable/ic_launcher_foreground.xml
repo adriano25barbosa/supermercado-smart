@@ -1,17 +1,41 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Carrinho com folha e limão, dentro da área segura (círculo de 66dp no centro) -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Limão (areia) -->
+    <path
+        android:fillColor="#E9C46A"
+        android:pathData="M70,38m-6,0a6,6 0,1 1,12 0a6,6 0,1 1,-12 0" />
+    <!-- Folha (sálvia) -->
     <path
         android:fillColor="#95D5B2"
-        android:pathData="M54,20 L74,34 L74,62 L54,76 L34,62 L34,34 Z" />
+        android:pathData="M52,44 C49,34 54,27 64,25 C67,35 62,42 52,44 Z" />
+    <path
+        android:strokeColor="#1B4332"
+        android:strokeWidth="1.2"
+        android:strokeLineCap="round"
+        android:pathData="M53.5,42 Q58,34 63,28" />
+    <!-- Cesto -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M44,50 L50,58 L66,40"
-        android:strokeColor="#1B4332"
-        android:strokeWidth="4"
+        android:pathData="M36,44 L82,44 L76,64 L42,64 Z" />
+    <path
+        android:strokeColor="#95D5B2"
+        android:strokeWidth="2.5"
         android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+        android:pathData="M42,51 L78,51 M44,57 L76,57" />
+    <!-- Alça e base -->
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="4.5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M36,44 L33,36 L28,36 M42,64 L44,70 L76,70" />
+    <!-- Rodas -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M49,77m-4.2,0a4.2,4.2 0,1 1,8.4 0a4.2,4.2 0,1 1,-8.4 0 M71,77m-4.2,0a4.2,4.2 0,1 1,8.4 0a4.2,4.2 0,1 1,-8.4 0" />
 </vector>

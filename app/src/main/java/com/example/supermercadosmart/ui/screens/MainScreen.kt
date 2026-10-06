@@ -15,11 +15,21 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.BrightnessAuto
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -49,6 +59,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.supermercadosmart.data.Category
 import com.example.supermercadosmart.data.Item
+import com.example.supermercadosmart.data.ThemeMode
 import com.example.supermercadosmart.data.categoryEnum
 import com.example.supermercadosmart.pdf.PdfExporter
 import com.example.supermercadosmart.viewmodel.ShoppingViewModel
@@ -60,13 +71,31 @@ private val headerCurrency = NumberFormat.getCurrencyInstance(Locale("pt", "BR")
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-fun MainScreen(viewModel: ShoppingViewModel) {
+fun MainScreen(
+    viewModel: ShoppingViewModel,
+    themeMode: ThemeMode = ThemeMode.SYSTEM,
+    onThemeModeChange: (ThemeMode) -> Unit = {}
+) {
     val context = LocalContext.current
     val shoppingItems by viewModel.allItems.collectAsState()
     val maxBudget by viewModel.maxBudget.collectAsState()
 
     var showAddDialog by remember { mutableStateOf(false) }
     var showBudgetDialog by remember { mutableStateOf(false) }
+
+    // Botão "+ Adicionar": painel com "Digitar" ou "Escanear"
+    var showAddSheet by remember { mutableStateOf(false) }
+    var showScanner by remember { mutableStateOf(false) }
+    // Código lido pelo "Escanear código", que vai preenchido para o diálogo de cadastro
+    var scannedBarcode by remember { mutableStateOf<String?>(null) }
+
+    // Menu ⋮ do topo
+    var showMenu by remember { mutableStateOf(false) }
+
+    fun openTypeDialog() {
+        scannedBarcode = null
+        showAddDialog = true
+    }
 
     // Duas seções: "A comprar" e "No carrinho" (recolhível, começa aberta)
     val toBuyItems = shoppingItems.filter { !it.inCart }
@@ -151,21 +180,84 @@ fun MainScreen(viewModel: ShoppingViewModel) {
                     containerColor = MaterialTheme.colorScheme.background
                 ),
                 actions = {
-                    androidx.compose.material3.IconButton(
-                        onClick = {
-                            if (shoppingItems.isNotEmpty()) {
-                                PdfExporter.exportAndShare(context, shoppingItems)
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "Mais opções")
+                        }
+                        DropdownMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Ver PDF") },
+                                leadingIcon = { Icon(Icons.Default.PictureAsPdf, contentDescription = null) },
+                                enabled = shoppingItems.isNotEmpty(),
+                                onClick = {
+                                    showMenu = false
+                                    PdfExporter.open(context, shoppingItems)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Compartilhar PDF") },
+                                leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                                enabled = shoppingItems.isNotEmpty(),
+                                onClick = {
+                                    showMenu = false
+                                    PdfExporter.exportAndShare(context, shoppingItems)
+                                }
+                            )
+
+                            // Tema: Sistema / Claro / Escuro (o escolhido fica com ✓)
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            Text(
+                                "Tema",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
+                            ThemeMode.values().forEach { mode ->
+                                DropdownMenuItem(
+                                    text = { Text(mode.label) },
+                                    leadingIcon = {
+                                        Icon(
+                                            when (mode) {
+                                                ThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
+                                                ThemeMode.LIGHT -> Icons.Default.LightMode
+                                                ThemeMode.DARK -> Icons.Default.DarkMode
+                                            },
+                                            contentDescription = null
+                                        )
+                                    },
+                                    trailingIcon = {
+                                        if (mode == themeMode) {
+                                            Icon(
+                                                Icons.Default.Check,
+                                                contentDescription = "Selecionado",
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    },
+                                    onClick = {
+                                        showMenu = false
+                                        onThemeModeChange(mode)
+                                    }
+                                )
                             }
                         }
-                    ) {
-                        Icon(Icons.Default.PictureAsPdf, contentDescription = "Exportar PDF")
                     }
                 }
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Adicionar produto")
+            // Com a lista vazia, os botões ficam na própria tela vazia
+            if (shoppingItems.isNotEmpty()) {
+                ExtendedFloatingActionButton(
+                    onClick = { showAddSheet = true },
+                    icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                    text = { Text("Adicionar") },
+                    // encolhe para só o "+" enquanto a lista está rolada
+                    expanded = !budgetCollapsed
+                )
             }
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -187,17 +279,10 @@ fun MainScreen(viewModel: ShoppingViewModel) {
             )
 
             if (shoppingItems.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        "Sua lista está vazia.\nToque no botão + para adicionar produtos.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                }
+                EmptyState(
+                    onType = { openTypeDialog() },
+                    onScan = { showScanner = true }
+                )
             } else {
                 LazyColumn(
                     state = listState,
@@ -279,8 +364,32 @@ fun MainScreen(viewModel: ShoppingViewModel) {
                     category = result.category
                 )
                 showAddDialog = false
+                scannedBarcode = null
             },
-            onDismiss = { showAddDialog = false }
+            onDismiss = {
+                showAddDialog = false
+                scannedBarcode = null
+            },
+            initialBarcode = scannedBarcode
+        )
+    }
+
+    if (showAddSheet) {
+        AddActionSheet(
+            onType = { openTypeDialog() },
+            onScan = { showScanner = true },
+            onDismiss = { showAddSheet = false }
+        )
+    }
+
+    if (showScanner) {
+        BarcodeScannerDialog(
+            onBarcodeScanned = { code ->
+                showScanner = false
+                scannedBarcode = code
+                showAddDialog = true
+            },
+            onDismiss = { showScanner = false }
         )
     }
 

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fundo da janela enquanto o app abre (evita piscar branco no modo escuro) -->
+    <color name="window_background">#F6EEE0</color>
+    <!-- Ícone do app -->
+    <color name="ic_launcher_background">#1B4332</color>
+</resources>

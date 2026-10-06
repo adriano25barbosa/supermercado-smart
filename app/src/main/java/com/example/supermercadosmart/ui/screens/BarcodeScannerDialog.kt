@@ -22,10 +22,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import com.example.supermercadosmart.camera.BarcodeAnalyzer
 import com.example.supermercadosmart.camera.CameraPreview
+import com.example.supermercadosmart.util.Haptics
 
 /**
  * Diálogo com leitor de código de barras em tempo real (ML Kit + CameraX).
@@ -39,8 +41,11 @@ fun BarcodeScannerDialog(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var manualCode by remember { mutableStateOf("") }
 
+    val context = LocalContext.current
     val analyzer = remember {
         BarcodeAnalyzer { code ->
+            // vibração curta confirmando a leitura pela câmera
+            Haptics.scanSuccess(context)
             onBarcodeScanned(code)
         }
     }

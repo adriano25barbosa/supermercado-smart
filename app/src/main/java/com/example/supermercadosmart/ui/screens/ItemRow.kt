@@ -4,7 +4,11 @@ package com.example.supermercadosmart.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
@@ -44,29 +48,41 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.example.supermercadosmart.data.Item
 import com.example.supermercadosmart.ui.theme.AlertRed
 import com.example.supermercadosmart.ui.theme.CardWhite
+import com.example.supermercadosmart.ui.theme.LocalDarkTheme
 import com.example.supermercadosmart.ui.theme.SuccessGreen
+import com.example.supermercadosmart.util.Haptics
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
 
@@ -96,6 +112,8 @@ fun ItemRow(
     val currentSwipeDelete by rememberUpdatedState(onSwipeDelete)
     // Evita disparar a ação duas vezes no mesmo gesto
     val lastSwipe = remember { longArrayOf(0L) }
+    val view = LocalView.current
+    val currentInCart by rememberUpdatedState(item.inCart)
 
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
@@ -105,6 +123,7 @@ fun ItemRow(
                 SwipeToDismissBoxValue.StartToEnd -> {
                     if (!repeated) {
                         lastSwipe[0] = now
+                        if (!currentInCart) Haptics.tick(view)
                         currentSwipeToggle()
                     }
                     false // volta para o lugar; o item só muda de seção
@@ -196,15 +215,52 @@ private fun ItemCard(
 ) {
     val colors = MaterialTheme.colorScheme
     val haptic = LocalHapticFeedback.current
+    val view = LocalView.current
+    val scope = rememberCoroutineScope()
     val currentLongPress by rememberUpdatedState(onLongPress)
+    val currentToggle by rememberUpdatedState(onToggleInCart)
+
+    // Ao tocar no círculo, o card anima na hora e o item só muda de seção logo depois,
+    // para dar tempo de ver o check e o risco. [pendingInCart] é esse estado provisório.
+    var pendingInCart by remember(item.id) { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(item.inCart) { pendingInCart = null }
+    val inCart = pendingInCart ?: item.inCart
+
     val containerColor by animateColorAsState(
-        targetValue = if (item.inCart) colors.primaryContainer else colors.surface,
+        targetValue = if (inCart) colors.primaryContainer else colors.surface,
+        animationSpec = tween(300),
         label = "cardColor"
     )
     val contentAlpha by animateFloatAsState(
-        targetValue = if (item.inCart) 0.6f else 1f,
+        targetValue = if (inCart) 0.6f else 1f,
+        animationSpec = tween(300),
         label = "contentAlpha"
     )
+    // Risco que atravessa o nome da esquerda para a direita
+    val strikeProgress by animateFloatAsState(
+        targetValue = if (inCart) 1f else 0f,
+        animationSpec = tween(durationMillis = 320),
+        label = "risco"
+    )
+    // Check que "pula" ao marcar (não anima quando o card só aparece na tela)
+    val checkScale = remember { Animatable(1f) }
+    val firstRun = remember { booleanArrayOf(true) }
+    LaunchedEffect(inCart) {
+        if (firstRun[0]) {
+            firstRun[0] = false
+            return@LaunchedEffect
+        }
+        if (inCart) {
+            checkScale.snapTo(0.4f)
+            checkScale.animateTo(
+                1f,
+                spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
+            )
+        }
+    }
+    val checkColor = if (LocalDarkTheme.current) colors.primary else SuccessGreen
+    var nameLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val strikeColor = colors.onSurface
 
     Card(
         modifier = Modifier
@@ -226,7 +282,7 @@ private fun ItemCard(
             },
         shape = CardShape,
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (item.inCart) 0.dp else 1.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = if (inCart) 0.dp else 1.dp)
     ) {
         Row(
             modifier = Modifier
@@ -234,11 +290,24 @@ private fun ItemCard(
                 .padding(start = 4.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onToggleInCart) {
+            IconButton(
+                onClick = {
+                    if (pendingInCart == null) {
+                        val marking = !item.inCart
+                        pendingInCart = marking
+                        if (marking) Haptics.tick(view)
+                        scope.launch {
+                            delay(380)
+                            currentToggle()
+                        }
+                    }
+                }
+            ) {
                 Icon(
-                    imageVector = if (item.inCart) Icons.Default.CheckCircle else Icons.Outlined.Circle,
-                    contentDescription = if (item.inCart) "Tirar do carrinho" else "Marcar no carrinho",
-                    tint = if (item.inCart) SuccessGreen else colors.outline
+                    imageVector = if (inCart) Icons.Default.CheckCircle else Icons.Outlined.Circle,
+                    contentDescription = if (inCart) "Tirar do carrinho" else "Marcar no carrinho",
+                    tint = if (inCart) checkColor else colors.outline,
+                    modifier = Modifier.scale(checkScale.value)
                 )
             }
 
@@ -255,7 +324,30 @@ private fun ItemCard(
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
-                    textDecoration = if (item.inCart) TextDecoration.LineThrough else TextDecoration.None
+                    onTextLayout = { nameLayout = it },
+                    modifier = Modifier.drawWithContent {
+                        drawContent()
+                        val layout = nameLayout ?: return@drawWithContent
+                        if (strikeProgress <= 0f) return@drawWithContent
+                        // Distribui o risco pelas linhas do nome (até 2), na ordem de leitura
+                        val lengths = (0 until layout.lineCount).map { line ->
+                            layout.getLineRight(line) - layout.getLineLeft(line)
+                        }
+                        var remaining = lengths.sum() * strikeProgress
+                        lengths.forEachIndexed { line, length ->
+                            if (remaining <= 0f) return@forEachIndexed
+                            val left = layout.getLineLeft(line)
+                            val drawn = minOf(length, remaining)
+                            val y = (layout.getLineTop(line) + layout.getLineBottom(line)) / 2f + 1.dp.toPx()
+                            drawLine(
+                                color = strikeColor,
+                                start = Offset(left, y),
+                                end = Offset(left + drawn, y),
+                                strokeWidth = 1.5.dp.toPx()
+                            )
+                            remaining -= drawn
+                        }
+                    }
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(

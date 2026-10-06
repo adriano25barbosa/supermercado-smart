@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
@@ -36,9 +37,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.supermercadosmart.ui.theme.AlertRed
-import com.example.supermercadosmart.ui.theme.CardWhite
 import com.example.supermercadosmart.ui.theme.ForestGreen
 import com.example.supermercadosmart.ui.theme.ForestGreenLight
+import com.example.supermercadosmart.ui.theme.LocalDarkTheme
+import com.example.supermercadosmart.ui.theme.NightCartContainer
 import com.example.supermercadosmart.ui.theme.Sage
 import com.example.supermercadosmart.ui.theme.SageLight
 import com.example.supermercadosmart.ui.theme.SandAccent
@@ -57,7 +59,11 @@ fun EmptyState(
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Canvas(modifier = Modifier.size(170.dp)) { drawEmptyCart() }
+            val colors = illustrationColors(
+                dark = LocalDarkTheme.current,
+                basketFill = MaterialTheme.colorScheme.surface
+            )
+            Canvas(modifier = Modifier.size(170.dp)) { drawEmptyCart(colors) }
 
             Spacer(Modifier.height(16.dp))
             Text(
@@ -89,13 +95,43 @@ fun EmptyState(
     }
 }
 
+/** Cores da ilustração: no modo escuro o contorno vira sálvia e o fundo, verde escuro. */
+private class IllustrationColors(
+    val circle: Color,
+    val basketFill: Color,
+    val outline: Color,
+    val ribs: Color,
+    val leafLight: Color,
+    val leafDark: Color
+)
+
+private fun illustrationColors(dark: Boolean, basketFill: Color) = if (dark) {
+    IllustrationColors(
+        circle = NightCartContainer,
+        basketFill = basketFill,
+        outline = Sage,
+        ribs = ForestGreenLight,
+        leafLight = SageLight,
+        leafDark = Sage
+    )
+} else {
+    IllustrationColors(
+        circle = SageLight,
+        basketFill = basketFill,
+        outline = ForestGreen,
+        ribs = Sage,
+        leafLight = Sage,
+        leafDark = ForestGreenLight
+    )
+}
+
 /** Carrinho com folhas, pão e tomate, nas cores da paleta "Gourmet Fresh". */
-private fun DrawScope.drawEmptyCart() {
+private fun DrawScope.drawEmptyCart(c: IllustrationColors) {
     val w = size.width
     fun p(x: Float, y: Float) = Offset(x * w, y * w)
 
     // Círculo de fundo sálvia claro
-    drawCircle(SageLight, radius = w * 0.48f, center = center)
+    drawCircle(c.circle, radius = w * 0.48f, center = center)
 
     // Brilhos em areia
     drawCircle(SandAccent, radius = w * 0.022f, center = p(0.20f, 0.22f))
@@ -112,10 +148,10 @@ private fun DrawScope.drawEmptyCart() {
         )
     }
     rotate(degrees = -28f, pivot = p(0.40f, 0.38f)) { // folha clara
-        drawOval(Sage, topLeft = p(0.35f, 0.24f), size = Size(0.10f * w, 0.24f * w))
+        drawOval(c.leafLight, topLeft = p(0.35f, 0.24f), size = Size(0.10f * w, 0.24f * w))
     }
     rotate(degrees = 8f, pivot = p(0.50f, 0.34f)) { // folha escura
-        drawOval(ForestGreenLight, topLeft = p(0.45f, 0.20f), size = Size(0.10f * w, 0.26f * w))
+        drawOval(c.leafDark, topLeft = p(0.45f, 0.20f), size = Size(0.10f * w, 0.26f * w))
     }
     drawCircle(AlertRed, radius = w * 0.06f, center = p(0.54f, 0.45f)) // tomate
 
@@ -129,13 +165,13 @@ private fun DrawScope.drawEmptyCart() {
         lineTo(0.34f * w, 0.66f * w)
         close()
     }
-    drawPath(basket, CardWhite)
-    drawPath(basket, ForestGreen, style = stroke)
+    drawPath(basket, c.basketFill)
+    drawPath(basket, c.outline, style = stroke)
 
     // Linhas do cesto
     val rib = Stroke(width = w * 0.016f, cap = StrokeCap.Round)
-    drawLine(Sage, p(0.33f, 0.53f), p(0.71f, 0.53f), strokeWidth = rib.width, cap = StrokeCap.Round)
-    drawLine(Sage, p(0.35f, 0.60f), p(0.69f, 0.60f), strokeWidth = rib.width, cap = StrokeCap.Round)
+    drawLine(c.ribs, p(0.33f, 0.53f), p(0.71f, 0.53f), strokeWidth = rib.width, cap = StrokeCap.Round)
+    drawLine(c.ribs, p(0.35f, 0.60f), p(0.69f, 0.60f), strokeWidth = rib.width, cap = StrokeCap.Round)
 
     // Alça
     val handle = Path().apply {
@@ -143,7 +179,7 @@ private fun DrawScope.drawEmptyCart() {
         lineTo(0.23f * w, 0.33f * w)
         lineTo(0.14f * w, 0.33f * w)
     }
-    drawPath(handle, ForestGreen, style = stroke)
+    drawPath(handle, c.outline, style = stroke)
 
     // Base e rodas
     val base = Path().apply {
@@ -151,7 +187,7 @@ private fun DrawScope.drawEmptyCart() {
         lineTo(0.37f * w, 0.73f * w)
         lineTo(0.69f * w, 0.73f * w)
     }
-    drawPath(base, ForestGreen, style = stroke)
-    drawCircle(ForestGreen, radius = w * 0.04f, center = p(0.41f, 0.81f))
-    drawCircle(ForestGreen, radius = w * 0.04f, center = p(0.65f, 0.81f))
+    drawPath(base, c.outline, style = stroke)
+    drawCircle(c.outline, radius = w * 0.04f, center = p(0.41f, 0.81f))
+    drawCircle(c.outline, radius = w * 0.04f, center = p(0.65f, 0.81f))
 }
