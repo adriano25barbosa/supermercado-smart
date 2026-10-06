@@ -11,6 +11,7 @@ import androidx.core.content.FileProvider
 import com.example.supermercadosmart.data.Category
 import com.example.supermercadosmart.data.Item
 import com.example.supermercadosmart.data.categoryEnum
+import com.example.supermercadosmart.data.hasPrice
 import java.io.File
 import java.io.FileOutputStream
 import java.text.NumberFormat
@@ -151,8 +152,11 @@ object PdfExporter {
                 canvas.drawText(checkbox, marginLeft, y, bodyPaint)
                 canvas.drawText(item.name.take(38), marginLeft + 25f, y, bodyPaint)
                 canvas.drawText(item.quantity.toString(), marginLeft + 300f, y, bodyPaint)
-                canvas.drawText(currencyFormat.format(item.unitPrice), marginLeft + 350f, y, bodyPaint)
-                canvas.drawText(currencyFormat.format(item.totalPrice), marginLeft + 440f, y, bodyPaint)
+                // Item sem preço ("Monte sua lista antecipado"): traço no lugar de R$ 0,00
+                val unitText = if (item.hasPrice) currencyFormat.format(item.unitPrice) else "—"
+                val totalText = if (item.hasPrice) currencyFormat.format(item.totalPrice) else "—"
+                canvas.drawText(unitText, marginLeft + 350f, y, bodyPaint)
+                canvas.drawText(totalText, marginLeft + 440f, y, bodyPaint)
 
                 total += item.totalPrice
                 y += 22f
@@ -165,6 +169,15 @@ object PdfExporter {
         canvas.drawLine(marginLeft, y, pageWidth - marginLeft, y, subtitlePaint)
         y += 25f
         canvas.drawText("TOTAL GERAL: ${currencyFormat.format(total)}", marginLeft, y, totalPaint)
+        val withoutPrice = items.count { !it.hasPrice }
+        if (withoutPrice > 0) {
+            y += 20f
+            canvas.drawText(
+                if (withoutPrice == 1) "1 item sem preço (não entra no total)"
+                else "$withoutPrice itens sem preço (não entram no total)",
+                marginLeft, y, subtitlePaint
+            )
+        }
 
         pdfDocument.finishPage(page)
 

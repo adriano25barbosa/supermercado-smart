@@ -29,6 +29,10 @@ interface ItemDao {
     @Delete
     suspend fun delete(item: Item)
 
+    /** Só o preço (não mexe em "no carrinho", quantidade etc.). */
+    @Query("UPDATE items SET unitPrice = :unitPrice WHERE id = :id")
+    suspend fun setPrice(id: Long, unitPrice: Double)
+
     @Query("DELETE FROM items WHERE listId = :listId")
     suspend fun clearList(listId: Long)
 

@@ -68,6 +68,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.ContentScale
@@ -76,6 +77,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.rememberAsyncImagePainter
 import com.example.supermercadosmart.data.Item
+import com.example.supermercadosmart.data.hasPrice
 import com.example.supermercadosmart.ui.theme.AlertRed
 import com.example.supermercadosmart.ui.theme.CardWhite
 import com.example.supermercadosmart.ui.theme.LocalDarkTheme
@@ -93,6 +95,7 @@ private val CardShape = RoundedCornerShape(16.dp)
  * Card de um item da lista, com deslizar:
  *  - para a direita → marca/desmarca no carrinho
  *  - para a esquerda → exclui
+ * Toque no card → [onPriceClick] (informar ou corrigir o preço).
  * Toque longo no card → [onLongPress] (trocar a categoria).
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -105,7 +108,8 @@ fun ItemRow(
     onSwipeToggleInCart: () -> Unit,
     onSwipeDelete: () -> Unit,
     modifier: Modifier = Modifier,
-    onLongPress: () -> Unit = {}
+    onLongPress: () -> Unit = {},
+    onPriceClick: () -> Unit = {}
 ) {
     // As ações mudam a cada recomposição (item atualizado); o estado do deslize é lembrado uma vez só
     val currentSwipeToggle by rememberUpdatedState(onSwipeToggleInCart)
@@ -155,7 +159,8 @@ fun ItemRow(
             onToggleInCart = onToggleInCart,
             onIncrement = onIncrement,
             onDecrement = onDecrement,
-            onLongPress = onLongPress
+            onLongPress = onLongPress,
+            onPriceClick = onPriceClick
         )
     }
 }
@@ -211,7 +216,8 @@ private fun ItemCard(
     onToggleInCart: () -> Unit,
     onIncrement: () -> Unit,
     onDecrement: () -> Unit,
-    onLongPress: () -> Unit
+    onLongPress: () -> Unit,
+    onPriceClick: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
     val haptic = LocalHapticFeedback.current
@@ -219,6 +225,8 @@ private fun ItemCard(
     val scope = rememberCoroutineScope()
     val currentLongPress by rememberUpdatedState(onLongPress)
     val currentToggle by rememberUpdatedState(onToggleInCart)
+    val currentPriceClick by rememberUpdatedState(onPriceClick)
+    val hasPrice = item.hasPrice
 
     // Ao tocar no círculo, o card anima na hora e o item só muda de seção logo depois,
     // para dar tempo de ver o check e o risco. [pendingInCart] é esse estado provisório.
@@ -265,9 +273,10 @@ private fun ItemCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            // Toque longo em qualquer parte do card (fora dos botões) troca a categoria
+            // Toque no card (fora dos botões) abre o preço; toque longo troca a categoria
             .pointerInput(Unit) {
                 detectTapGestures(
+                    onTap = { currentPriceClick() },
                     onLongPress = {
                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         currentLongPress()
@@ -275,6 +284,10 @@ private fun ItemCard(
                 )
             }
             .semantics {
+                onClick(label = "Informar preço") {
+                    currentPriceClick()
+                    true
+                }
                 onLongClick(label = "Mudar categoria") {
                     currentLongPress()
                     true
@@ -350,19 +363,32 @@ private fun ItemCard(
                     }
                 )
                 Spacer(Modifier.height(2.dp))
-                Text(
-                    "${currencyFormat.format(item.unitPrice)} un.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.onSurfaceVariant
-                )
+                if (hasPrice) {
+                    Text(
+                        "${currencyFormat.format(item.unitPrice)} un.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.onSurfaceVariant
+                    )
+                } else {
+                    // Item da "Monte sua lista antecipado": o preço é informado no mercado
+                    Text(
+                        "Sem preço · toque para informar",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.tertiary,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
 
             Column(horizontalAlignment = Alignment.End) {
                 Text(
-                    currencyFormat.format(item.totalPrice),
+                    if (hasPrice) currencyFormat.format(item.totalPrice) else "—",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = colors.onSurface.copy(alpha = contentAlpha)
+                    color = if (hasPrice) colors.onSurface.copy(alpha = contentAlpha)
+                    else colors.onSurfaceVariant.copy(alpha = contentAlpha)
                 )
                 Spacer(Modifier.height(6.dp))
                 QuantityPill(

@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import com.example.supermercadosmart.data.BudgetBand
 import com.example.supermercadosmart.data.BudgetStatus
 import com.example.supermercadosmart.data.Item
+import com.example.supermercadosmart.data.hasPrice
 import com.example.supermercadosmart.ui.theme.AlertRedBright
 import com.example.supermercadosmart.ui.theme.CardWhite
 import com.example.supermercadosmart.ui.theme.ForestGreen
@@ -85,6 +86,8 @@ fun SubtotalCard(
     val itemCount = items.sumOf { it.quantity }
     val status = BudgetStatus(total = total, maxBudget = maxBudget)
     val itemsLabel = "$itemCount ${if (itemCount == 1) "item" else "itens"}"
+    // Itens da "Monte sua lista antecipado" que ainda estão sem preço: o total é parcial
+    val withoutPrice = items.count { !it.hasPrice }
 
     val accent by animateColorAsState(
         targetValue = bandColor(status.band),
@@ -120,6 +123,21 @@ fun SubtotalCard(
                     fraction = status.usedFraction.toFloat(),
                     color = accent,
                     height = if (collapsed) 6.dp else 10.dp
+                )
+            }
+
+            AnimatedVisibility(
+                visible = !collapsed && withoutPrice > 0,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Text(
+                    if (withoutPrice == 1) "1 item sem preço · o total ainda é parcial"
+                    else "$withoutPrice itens sem preço · o total ainda é parcial",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = SandAccent,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 10.dp)
                 )
             }
 

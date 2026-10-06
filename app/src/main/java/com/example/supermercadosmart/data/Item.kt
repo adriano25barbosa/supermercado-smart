@@ -23,3 +23,10 @@ data class Item(
     val totalPrice: Double
         get() = unitPrice * quantity
 }
+
+/**
+ * Item sem preço: criado pela "Monte sua lista antecipado" (o preço é informado no mercado).
+ * No banco fica como preço 0, sem coluna nova.
+ */
+val Item.hasPrice: Boolean
+    get() = unitPrice > 0.0

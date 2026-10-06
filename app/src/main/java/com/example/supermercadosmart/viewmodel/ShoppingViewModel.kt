@@ -12,6 +12,7 @@ import com.example.supermercadosmart.data.ListContent
 import com.example.supermercadosmart.data.ListSummary
 import com.example.supermercadosmart.data.LookupResult
 import com.example.supermercadosmart.data.ProductLookup
+import com.example.supermercadosmart.data.QuickEntry
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -124,6 +125,37 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
                     listId = listId
                 )
             )
+        }
+    }
+
+    /**
+     * "Monte sua lista antecipado": vários itens de uma vez, só nome, quantidade e categoria,
+     * sem preço (preço 0, informado depois no mercado). Ficam na lista na ordem digitada.
+     */
+    fun addItems(entries: List<Pair<QuickEntry, Category>>) {
+        val listId = _currentListId.value ?: return
+        if (entries.isEmpty()) return
+        // A lista mostra o mais novo primeiro: o primeiro digitado ganha o horário maior
+        val now = System.currentTimeMillis()
+        val items = entries.mapIndexed { index, (entry, category) ->
+            Item(
+                name = entry.name,
+                unitPrice = 0.0,
+                quantity = entry.quantity,
+                category = category.name,
+                listId = listId,
+                timestamp = now + (entries.size - 1 - index)
+            )
+        }
+        viewModelScope.launch {
+            repository.insertAll(items)
+        }
+    }
+
+    /** Informa (ou corrige) o preço de um item. Só o preço muda no banco. */
+    fun setPrice(item: Item, unitPrice: Double) {
+        viewModelScope.launch {
+            repository.setPrice(item.id, unitPrice.coerceAtLeast(0.0))
         }
     }
 

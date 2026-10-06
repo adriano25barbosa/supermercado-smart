@@ -9,10 +9,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.Button
@@ -45,9 +46,10 @@ import com.example.supermercadosmart.ui.theme.Sage
 import com.example.supermercadosmart.ui.theme.SageLight
 import com.example.supermercadosmart.ui.theme.SandAccent
 
-/** Tela de lista vazia: ilustração de carrinho, texto curto e os dois jeitos de adicionar. */
+/** Tela de lista vazia: ilustração de carrinho, texto curto e os jeitos de adicionar. */
 @Composable
 fun EmptyState(
+    onQuickList: () -> Unit,
     onType: () -> Unit,
     onScan: () -> Unit,
     modifier: Modifier = Modifier
@@ -75,19 +77,25 @@ fun EmptyState(
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "Adicione o primeiro produto digitando o nome\nou escaneando o código de barras.",
+                "Monte a lista em casa só com os nomes\ne informe os preços no mercado.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center
             )
 
             Spacer(Modifier.height(24.dp))
-            Button(onClick = onType, modifier = Modifier.width(240.dp)) {
+            val buttonWidth = Modifier.widthIn(max = 300.dp).fillMaxWidth()
+            Button(onClick = onQuickList, modifier = buttonWidth) {
+                Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null)
+                Text("Monte sua lista antecipado", modifier = Modifier.padding(start = 8.dp))
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = onType, modifier = buttonWidth) {
                 Icon(Icons.Default.Edit, contentDescription = null)
                 Text("Digitar produto", modifier = Modifier.padding(start = 8.dp))
             }
             Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = onScan, modifier = Modifier.width(240.dp)) {
+            OutlinedButton(onClick = onScan, modifier = buttonWidth) {
                 Icon(Icons.Default.QrCodeScanner, contentDescription = null)
                 Text("Escanear código", modifier = Modifier.padding(start = 8.dp))
             }

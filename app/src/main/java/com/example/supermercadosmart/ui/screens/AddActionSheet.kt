@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,10 +35,11 @@ import kotlinx.coroutines.launch
 
 /**
  * Painel que sobe do rodapé ao tocar em "+ Adicionar":
- * "Digitar produto" ou "Escanear código".
+ * "Monte sua lista antecipado", "Digitar produto" ou "Escanear código".
  */
 @Composable
 fun AddActionSheet(
+    onQuickList: () -> Unit,
     onType: () -> Unit,
     onScan: () -> Unit,
     onDismiss: () -> Unit
@@ -67,6 +69,12 @@ fun AddActionSheet(
                 modifier = Modifier.padding(horizontal = 24.dp, vertical = 4.dp)
             )
             Spacer(Modifier.height(8.dp))
+            AddActionOption(
+                icon = Icons.AutoMirrored.Filled.PlaylistAdd,
+                title = "Monte sua lista antecipado",
+                subtitle = "Vários itens de uma vez, só o nome; o preço você põe no mercado",
+                onClick = { closeThen(onQuickList) }
+            )
             AddActionOption(
                 icon = Icons.Default.Edit,
                 title = "Digitar produto",

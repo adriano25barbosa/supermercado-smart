@@ -58,6 +58,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.supermercadosmart.data.Category
 import com.example.supermercadosmart.data.Item
+import com.example.supermercadosmart.data.QuickListParser
+import com.example.supermercadosmart.data.hasPrice
 import com.example.supermercadosmart.data.ThemeMode
 import com.example.supermercadosmart.data.categoryEnum
 import com.example.supermercadosmart.pdf.PdfExporter
@@ -97,6 +99,11 @@ fun MainScreen(
     var showScanner by remember { mutableStateOf(false) }
     // Código lido pelo "Escanear código", que vai preenchido para o diálogo de cadastro
     var scannedBarcode by remember { mutableStateOf<String?>(null) }
+
+    // "Monte sua lista antecipado" (vários itens só com o nome)
+    var showQuickList by remember { mutableStateOf(false) }
+    // Item cujo preço está sendo informado; fromCart = abriu sozinho ao marcar no carrinho
+    var priceEdit by remember { mutableStateOf<Pair<Item, Boolean>?>(null) }
 
     // Menu ⋮ do topo
     var showMenu by remember { mutableStateOf(false) }
@@ -152,7 +159,11 @@ fun MainScreen(
     val ShoppingItem: @Composable (Item, Modifier) -> Unit = { item, itemModifier ->
         ItemRow(
             item = item,
-            onToggleInCart = { viewModel.toggleInCart(item) },
+            onToggleInCart = {
+                viewModel.toggleInCart(item)
+                // Marcou no carrinho um item sem preço: pergunta quanto custou
+                if (!item.inCart && !item.hasPrice) priceEdit = item to true
+            },
             onIncrement = {
                 viewModel.updateItem(item.copy(quantity = item.quantity + 1))
             },
@@ -164,6 +175,7 @@ fun MainScreen(
             onSwipeToggleInCart = {
                 val wasInCart = item.inCart
                 viewModel.toggleInCart(item)
+                if (!wasInCart && !item.hasPrice) priceEdit = item to true
                 showUndo(
                     if (wasInCart) "\"${item.name}\" voltou para a lista"
                     else "\"${item.name}\" no carrinho"
@@ -178,7 +190,8 @@ fun MainScreen(
                 showUndo("\"${item.name}\" removido") { viewModel.restoreItem(item) }
             },
             modifier = itemModifier,
-            onLongPress = { categoryEditItem = item }
+            onLongPress = { categoryEditItem = item },
+            onPriceClick = { priceEdit = item to false }
         )
     }
 
@@ -286,6 +299,7 @@ fun MainScreen(
                 // carregando a lista (é rapidinho)
             } else if (shoppingItems.isEmpty()) {
                 EmptyState(
+                    onQuickList = { showQuickList = true },
                     onType = { openTypeDialog() },
                     onScan = { showScanner = true }
                 )
@@ -383,9 +397,44 @@ fun MainScreen(
 
     if (showAddSheet) {
         AddActionSheet(
+            onQuickList = { showQuickList = true },
             onType = { openTypeDialog() },
             onScan = { showScanner = true },
             onDismiss = { showAddSheet = false }
+        )
+    }
+
+    if (showQuickList) {
+        QuickListSheet(
+            existingNames = shoppingItems.map { QuickListParser.key(it.name) }.toSet(),
+            onConfirm = { entries ->
+                viewModel.addItems(entries)
+                showQuickList = false
+                scope.launch {
+                    snackbarHostState.currentSnackbarData?.dismiss()
+                    snackbarHostState.showSnackbar(
+                        if (entries.size == 1) "1 item adicionado · toque nele para informar o preço"
+                        else "${entries.size} itens adicionados · toque em um item para informar o preço"
+                    )
+                }
+            },
+            onDismiss = { showQuickList = false }
+        )
+    }
+
+    priceEdit?.let { (editing, fromCart) ->
+        // versão mais recente do item (a quantidade pode ter mudado)
+        val current = shoppingItems.find { it.id == editing.id } ?: editing
+        PriceDialog(
+            itemName = current.name,
+            currentPrice = current.unitPrice,
+            quantity = current.quantity,
+            fromCart = fromCart,
+            onConfirm = { price ->
+                viewModel.setPrice(current, price)
+                priceEdit = null
+            },
+            onDismiss = { priceEdit = null }
         )
     }
 

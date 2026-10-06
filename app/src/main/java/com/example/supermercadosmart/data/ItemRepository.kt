@@ -53,6 +53,10 @@ class ItemRepository(private val db: AppDatabase) {
 
     suspend fun insert(item: Item): Long = itemDao.insert(item)
 
+    suspend fun insertAll(items: List<Item>) = itemDao.insertAll(items)
+
+    suspend fun setPrice(itemId: Long, unitPrice: Double) = itemDao.setPrice(itemId, unitPrice)
+
     suspend fun update(item: Item) = itemDao.update(item)
 
     suspend fun delete(item: Item) = itemDao.delete(item)
