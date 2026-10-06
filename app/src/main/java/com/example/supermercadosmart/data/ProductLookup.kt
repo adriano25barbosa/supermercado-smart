@@ -13,7 +13,13 @@ import java.net.URL
 import java.util.Locale
 
 /** De onde veio o produto encontrado pelo código de barras. */
-enum class LookupSource { MY_LISTS, OPEN_FOOD_FACTS }
+enum class LookupSource(val label: String) {
+    MY_LISTS("suas listas"),
+    OPEN_FOOD_FACTS("Open Food Facts"),
+    OPEN_BEAUTY_FACTS("Open Beauty Facts"),
+    OPEN_PET_FOOD_FACTS("Open Pet Food Facts"),
+    OPEN_PRODUCTS_FACTS("Open Products Facts")
+}
 
 /** Resultado da busca pelo código de barras. */
 sealed class LookupResult {
@@ -40,6 +46,9 @@ sealed class LookupResult {
  * 1. Procura nas listas do próprio app (funciona sem internet).
  * 2. Se não achar, consulta o Open Food Facts (base aberta e gratuita, sem chave de acesso)
  *    e salva a foto no celular, para ela aparecer mesmo sem internet no mercado.
+ * 3. Se o Open Food Facts responder que o código é de outro tipo de produto (higiene e beleza,
+ *    ração, limpeza…), consulta a base irmã certa: Open Beauty Facts, Open Pet Food Facts
+ *    ou Open Products Facts.
  * Usa só HttpURLConnection e org.json, que já vêm no Android (nenhuma biblioteca nova).
  */
 class ProductLookup(
@@ -65,7 +74,21 @@ class ProductLookup(
         if (code.isEmpty() || !code.all { it.isDigit() }) return@withContext LookupResult.NotFound
 
         try {
-            fetchFromOpenFoodFacts(code)
+            when (val food = fetch(code, Base.FOOD)) {
+                is FetchResult.Done -> food.result
+                // "product found with a different product type: beauty" → consulta a base certa
+                is FetchResult.OtherType -> {
+                    val base = Base.forType(food.type)
+                    if (base == null) {
+                        LookupResult.NotFound
+                    } else {
+                        when (val other = fetch(code, base)) {
+                            is FetchResult.Done -> other.result
+                            is FetchResult.OtherType -> LookupResult.NotFound
+                        }
+                    }
+                }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: IOException) {
@@ -76,8 +99,33 @@ class ProductLookup(
         }
     }
 
-    private fun fetchFromOpenFoodFacts(code: String): LookupResult {
-        val url = URL("$API_URL$code.json?fields=$FIELDS")
+    /** Resposta de uma das bases: resultado final, ou "o código é de outro tipo de produto". */
+    private sealed class FetchResult {
+        data class Done(val result: LookupResult) : FetchResult()
+        data class OtherType(val type: String) : FetchResult()
+    }
+
+    /** Bases do projeto Open Food Facts: mesma API, cada uma com um tipo de produto. */
+    private enum class Base(
+        val host: String,
+        val productType: String,
+        val source: LookupSource,
+        /** Categoria fixa da base (null = palpite pelo nome e pelas categorias do produto). */
+        val category: Category?
+    ) {
+        FOOD("world.openfoodfacts.org", "food", LookupSource.OPEN_FOOD_FACTS, null),
+        BEAUTY("world.openbeautyfacts.org", "beauty", LookupSource.OPEN_BEAUTY_FACTS, Category.HIGIENE),
+        PET_FOOD("world.openpetfoodfacts.org", "petfood", LookupSource.OPEN_PET_FOOD_FACTS, Category.PET),
+        PRODUCTS("world.openproductsfacts.org", "product", LookupSource.OPEN_PRODUCTS_FACTS, null);
+
+        companion object {
+            fun forType(type: String): Base? =
+                values().firstOrNull { it != FOOD && it.productType == type }
+        }
+    }
+
+    private fun fetch(code: String, base: Base): FetchResult {
+        val url = URL("https://${base.host}/api/v2/product/$code.json?fields=$FIELDS")
         val connection = (url.openConnection() as HttpURLConnection).apply {
             connectTimeout = TIMEOUT_MS
             readTimeout = TIMEOUT_MS
@@ -87,28 +135,47 @@ class ProductLookup(
         }
         try {
             val status = connection.responseCode
-            if (status == HttpURLConnection.HTTP_NOT_FOUND) return LookupResult.NotFound
-            if (status != HttpURLConnection.HTTP_OK) return LookupResult.Failed
+            // O 404 também traz um JSON (que pode dizer "é de outro tipo de produto")
+            val stream = when (status) {
+                HttpURLConnection.HTTP_OK -> connection.inputStream
+                HttpURLConnection.HTTP_NOT_FOUND -> connection.errorStream
+                else -> null
+            } ?: return FetchResult.Done(
+                if (status == HttpURLConnection.HTTP_NOT_FOUND) LookupResult.NotFound
+                else LookupResult.Failed
+            )
 
-            val body = connection.inputStream.bufferedReader().use { it.readText() }
+            val body = stream.bufferedReader().use { it.readText() }
             val json = JSONObject(body)
-            if (json.optInt("status", 0) != 1) return LookupResult.NotFound
-            val product = json.optJSONObject("product") ?: return LookupResult.NotFound
+            if (json.optInt("status", 0) != 1) {
+                val verbose = json.optString("status_verbose", "")
+                val otherType = OTHER_TYPE_REGEX.find(verbose)?.groupValues?.get(1)
+                return if (otherType != null && otherType != base.productType) {
+                    FetchResult.OtherType(otherType)
+                } else {
+                    FetchResult.Done(LookupResult.NotFound)
+                }
+            }
+            val product = json.optJSONObject("product")
+                ?: return FetchResult.Done(LookupResult.NotFound)
 
             val name = buildName(product)
             val imageUrl = product.text("image_front_url") ?: product.text("image_url")
             val imageUri = imageUrl?.let { downloadImage(code, it) }
 
-            if (name == null && imageUri == null) return LookupResult.NotFound
+            if (name == null && imageUri == null) return FetchResult.Done(LookupResult.NotFound)
 
-            val category = name?.let { Category.guess(it) }?.takeIf { it != Category.OUTROS }
+            val category = base.category
+                ?: name?.let { Category.guess(it) }?.takeIf { it != Category.OUTROS }
                 ?: categoryFromTags(product)
 
-            return LookupResult.Found(
-                name = name,
-                imageUri = imageUri,
-                category = category,
-                source = LookupSource.OPEN_FOOD_FACTS
+            return FetchResult.Done(
+                LookupResult.Found(
+                    name = name,
+                    imageUri = imageUri,
+                    category = category,
+                    source = base.source
+                )
             )
         } finally {
             connection.disconnect()
@@ -196,7 +263,8 @@ class ProductLookup(
         optString(key, "").trim().takeIf { it.isNotEmpty() && it != "null" }
 
     private companion object {
-        const val API_URL = "https://world.openfoodfacts.org/api/v2/product/"
+        /** "product found with a different product type: beauty" → "beauty" */
+        val OTHER_TYPE_REGEX = Regex("different product type:\\s*([a-z_]+)")
         const val FIELDS =
             "product_name,product_name_pt,generic_name_pt,brands,quantity,image_front_url,image_url,categories_tags"
         const val USER_AGENT =

@@ -326,9 +326,10 @@ private fun LookupStatus(state: LookupUiState, onRetry: () -> Unit) {
         }
         is LookupUiState.Found -> LookupMessage(
             icon = Icons.Default.CheckCircle,
-            text = when (state.source) {
-                LookupSource.MY_LISTS -> "Encontrado nas suas listas"
-                LookupSource.OPEN_FOOD_FACTS -> "Encontrado no Open Food Facts"
+            text = if (state.source == LookupSource.MY_LISTS) {
+                "Encontrado nas suas listas"
+            } else {
+                "Encontrado no ${state.source.label}"
             },
             tint = MaterialTheme.colorScheme.primary
         )
