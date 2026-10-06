@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.supermercadosmart.data.AppDatabase
+import com.example.supermercadosmart.data.Category
 import com.example.supermercadosmart.data.Item
 import com.example.supermercadosmart.data.ItemRepository
 import kotlinx.coroutines.flow.SharingStarted
@@ -43,7 +44,8 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
         unitPrice: Double,
         quantity: Int,
         imageUri: String? = null,
-        barcode: String? = null
+        barcode: String? = null,
+        category: String = Category.OUTROS.name
     ) {
         viewModelScope.launch {
             repository.insert(
@@ -52,7 +54,8 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
                     unitPrice = unitPrice,
                     quantity = quantity,
                     imageUri = imageUri,
-                    barcode = barcode
+                    barcode = barcode,
+                    category = category
                 )
             )
         }
@@ -67,6 +70,13 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
     fun toggleInCart(item: Item) {
         viewModelScope.launch {
             repository.update(item.copy(inCart = !item.inCart))
+        }
+    }
+
+    /** Troca a categoria de um item (toque longo no card). */
+    fun changeCategory(item: Item, category: Category) {
+        viewModelScope.launch {
+            repository.update(item.copy(category = category.name))
         }
     }
 

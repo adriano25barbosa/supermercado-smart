@@ -10,6 +10,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -51,6 +52,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
@@ -71,6 +77,7 @@ private val CardShape = RoundedCornerShape(16.dp)
  * Card de um item da lista, com deslizar:
  *  - para a direita → marca/desmarca no carrinho
  *  - para a esquerda → exclui
+ * Toque longo no card → [onLongPress] (trocar a categoria).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,7 +88,8 @@ fun ItemRow(
     onDecrement: () -> Unit,
     onSwipeToggleInCart: () -> Unit,
     onSwipeDelete: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onLongPress: () -> Unit = {}
 ) {
     // As ações mudam a cada recomposição (item atualizado); o estado do deslize é lembrado uma vez só
     val currentSwipeToggle by rememberUpdatedState(onSwipeToggleInCart)
@@ -127,7 +135,8 @@ fun ItemRow(
             item = item,
             onToggleInCart = onToggleInCart,
             onIncrement = onIncrement,
-            onDecrement = onDecrement
+            onDecrement = onDecrement,
+            onLongPress = onLongPress
         )
     }
 }
@@ -182,9 +191,12 @@ private fun ItemCard(
     item: Item,
     onToggleInCart: () -> Unit,
     onIncrement: () -> Unit,
-    onDecrement: () -> Unit
+    onDecrement: () -> Unit,
+    onLongPress: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
+    val haptic = LocalHapticFeedback.current
+    val currentLongPress by rememberUpdatedState(onLongPress)
     val containerColor by animateColorAsState(
         targetValue = if (item.inCart) colors.primaryContainer else colors.surface,
         label = "cardColor"
@@ -195,7 +207,23 @@ private fun ItemCard(
     )
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            // Toque longo em qualquer parte do card (fora dos botões) troca a categoria
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onLongPress = {
+                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        currentLongPress()
+                    }
+                )
+            }
+            .semantics {
+                onLongClick(label = "Mudar categoria") {
+                    currentLongPress()
+                    true
+                }
+            },
         shape = CardShape,
         colors = CardDefaults.cardColors(containerColor = containerColor),
         elevation = CardDefaults.cardElevation(defaultElevation = if (item.inCart) 0.dp else 1.dp)

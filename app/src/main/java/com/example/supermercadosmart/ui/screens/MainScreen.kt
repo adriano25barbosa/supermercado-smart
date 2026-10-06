@@ -1,6 +1,7 @@
 package com.example.supermercadosmart.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -46,7 +47,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.supermercadosmart.data.Category
 import com.example.supermercadosmart.data.Item
+import com.example.supermercadosmart.data.categoryEnum
 import com.example.supermercadosmart.pdf.PdfExporter
 import com.example.supermercadosmart.viewmodel.ShoppingViewModel
 import kotlinx.coroutines.launch
@@ -69,6 +72,15 @@ fun MainScreen(viewModel: ShoppingViewModel) {
     val toBuyItems = shoppingItems.filter { !it.inCart }
     val inCartItems = shoppingItems.filter { it.inCart }
     var cartExpanded by rememberSaveable { mutableStateOf(true) }
+
+    // "A comprar" agrupado por categoria, na ordem dos corredores; categorias vazias somem
+    val toBuyByCategory = Category.values().mapNotNull { category ->
+        val itemsInCategory = toBuyItems.filter { it.categoryEnum == category }
+        if (itemsInCategory.isEmpty()) null else category to itemsInCategory
+    }
+
+    // Item cuja categoria está sendo trocada (toque longo)
+    var categoryEditItem by remember { mutableStateOf<Item?>(null) }
 
     // Barra "Desfazer" no rodapé
     val snackbarHostState = remember { SnackbarHostState() }
@@ -126,7 +138,8 @@ fun MainScreen(viewModel: ShoppingViewModel) {
                 viewModel.deleteItem(item)
                 showUndo("\"${item.name}\" removido") { viewModel.restoreItem(item) }
             },
-            modifier = itemModifier
+            modifier = itemModifier,
+            onLongPress = { categoryEditItem = item }
         )
     }
 
@@ -215,12 +228,23 @@ fun MainScreen(viewModel: ShoppingViewModel) {
                         }
                     }
 
-                    items(toBuyItems, key = { it.id }) { item ->
-                        ShoppingItem(item, Modifier.animateItemPlacement())
+                    toBuyByCategory.forEach { (category, itemsInCategory) ->
+                        // Cabeçalho fixo: fica no topo enquanto os itens da categoria rolam
+                        stickyHeader(key = "category_${category.name}") {
+                            CategoryHeader(
+                                category = category,
+                                count = itemsInCategory.size,
+                                total = itemsInCategory.sumOf { it.totalPrice }
+                            )
+                        }
+                        items(itemsInCategory, key = { it.id }) { item ->
+                            ShoppingItem(item, Modifier.animateItemPlacement())
+                        }
                     }
 
                     if (inCartItems.isNotEmpty()) {
-                        item(key = "header_in_cart") {
+                        // Também fixo, para o último cabeçalho de categoria não ficar por cima do carrinho
+                        stickyHeader(key = "header_in_cart") {
                             SectionHeader(
                                 title = "No carrinho",
                                 count = inCartItems.size,
@@ -228,8 +252,8 @@ fun MainScreen(viewModel: ShoppingViewModel) {
                                 expanded = cartExpanded,
                                 onClick = { cartExpanded = !cartExpanded },
                                 modifier = Modifier
+                                    .background(MaterialTheme.colorScheme.background)
                                     .padding(top = 8.dp)
-                                    .animateItemPlacement()
                             )
                         }
                         if (cartExpanded) {
@@ -251,11 +275,28 @@ fun MainScreen(viewModel: ShoppingViewModel) {
                     unitPrice = result.unitPrice,
                     quantity = result.quantity,
                     imageUri = result.imageUri,
-                    barcode = result.barcode
+                    barcode = result.barcode,
+                    category = result.category
                 )
                 showAddDialog = false
             },
             onDismiss = { showAddDialog = false }
+        )
+    }
+
+    categoryEditItem?.let { editing ->
+        CategoryPickerDialog(
+            itemName = editing.name,
+            current = editing.categoryEnum,
+            onSelect = { newCategory ->
+                // usa a versão mais recente do item (pode ter mudado quantidade etc.)
+                val current = viewModel.allItems.value.find { it.id == editing.id } ?: editing
+                if (newCategory != current.categoryEnum) {
+                    viewModel.changeCategory(current, newCategory)
+                }
+                categoryEditItem = null
+            },
+            onDismiss = { categoryEditItem = null }
         )
     }
 

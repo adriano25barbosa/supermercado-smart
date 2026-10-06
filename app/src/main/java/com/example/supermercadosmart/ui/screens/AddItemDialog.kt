@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -39,13 +41,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import coil.compose.rememberAsyncImagePainter
+import com.example.supermercadosmart.data.Category
 
 data class NewItemResult(
     val name: String,
     val unitPrice: Double,
     val quantity: Int,
     val imageUri: String?,
-    val barcode: String?
+    val barcode: String?,
+    val category: String
 )
 
 @Composable
@@ -59,6 +63,10 @@ fun AddItemDialog(
     var imageUri by remember { mutableStateOf<Uri?>(null) }
     var barcode by remember { mutableStateOf<String?>(null) }
 
+    // Categoria: o app sugere pelo nome até a pessoa escolher um chip por conta própria
+    var category by remember { mutableStateOf(Category.OUTROS) }
+    var categoryChosenByUser by remember { mutableStateOf(false) }
+
     var showPhotoDialog by remember { mutableStateOf(false) }
     var showBarcodeDialog by remember { mutableStateOf(false) }
 
@@ -71,6 +79,7 @@ fun AddItemDialog(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(20.dp))
+                .verticalScroll(rememberScrollState())
                 .padding(20.dp)
         ) {
             Text("Adicionar produto", style = MaterialTheme.typography.titleLarge)
@@ -108,10 +117,27 @@ fun AddItemDialog(
 
             OutlinedTextField(
                 value = name,
-                onValueChange = { name = it },
+                onValueChange = {
+                    name = it
+                    if (!categoryChosenByUser) category = Category.guess(it)
+                },
                 label = { Text("Nome do produto") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true
+            )
+
+            Text(
+                "Categoria",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp)
+            )
+            CategoryChipsRow(
+                selected = category,
+                onSelect = {
+                    category = it
+                    categoryChosenByUser = true
+                }
             )
 
             Row(
@@ -183,7 +209,8 @@ fun AddItemDialog(
                                 unitPrice = price ?: 0.0,
                                 quantity = qty,
                                 imageUri = imageUri?.toString(),
-                                barcode = barcode
+                                barcode = barcode,
+                                category = category.name
                             )
                         )
                     },

@@ -13,6 +13,8 @@ data class Item(
     val inCart: Boolean = false,
     val imageUri: String? = null,
     val barcode: String? = null,
+    /** Chave da categoria (ex.: "LIMPEZA"); veja [Category]. */
+    val category: String = Category.OUTROS.name,
     val timestamp: Long = System.currentTimeMillis()
 ) {
     val totalPrice: Double
