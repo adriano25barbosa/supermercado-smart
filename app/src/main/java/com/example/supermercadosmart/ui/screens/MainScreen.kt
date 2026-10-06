@@ -1,5 +1,6 @@
 package com.example.supermercadosmart.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -20,10 +21,8 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material.icons.filled.BrightnessAuto
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.DropdownMenu
@@ -73,12 +72,22 @@ private val headerCurrency = NumberFormat.getCurrencyInstance(Locale("pt", "BR")
 @Composable
 fun MainScreen(
     viewModel: ShoppingViewModel,
+    listId: Long,
+    onBack: () -> Unit,
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     onThemeModeChange: (ThemeMode) -> Unit = {}
 ) {
     val context = LocalContext.current
-    val shoppingItems by viewModel.allItems.collectAsState()
-    val maxBudget by viewModel.maxBudget.collectAsState()
+    // Conteúdo da lista aberta. Só vale se for desta lista ([listId]): ao trocar de lista,
+    // a tela fica vazia por um instante em vez de mostrar os itens da lista anterior.
+    val content by viewModel.listContent.collectAsState()
+    val ready = content?.listId == listId
+    val shoppingItems = if (ready) content?.items.orEmpty() else emptyList()
+    val listName = if (ready) content?.list?.name.orEmpty() else ""
+    val maxBudget = if (ready) content?.list?.maxBudget ?: 0.0 else 0.0
+
+    // Voltar (botão do celular ou seta do topo) leva para "Minhas listas"
+    BackHandler(onBack = onBack)
 
     var showAddDialog by remember { mutableStateOf(false) }
     var showBudgetDialog by remember { mutableStateOf(false) }
@@ -91,6 +100,7 @@ fun MainScreen(
 
     // Menu ⋮ do topo
     var showMenu by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
 
     fun openTypeDialog() {
         scannedBarcode = null
@@ -175,7 +185,18 @@ fun MainScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Supermercado Smart") },
+                title = {
+                    Text(
+                        listName,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Minhas listas")
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
                 ),
@@ -194,7 +215,7 @@ fun MainScreen(
                                 enabled = shoppingItems.isNotEmpty(),
                                 onClick = {
                                     showMenu = false
-                                    PdfExporter.open(context, shoppingItems)
+                                    PdfExporter.open(context, shoppingItems, listName)
                                 }
                             )
                             DropdownMenuItem(
@@ -203,46 +224,29 @@ fun MainScreen(
                                 enabled = shoppingItems.isNotEmpty(),
                                 onClick = {
                                     showMenu = false
-                                    PdfExporter.exportAndShare(context, shoppingItems)
+                                    PdfExporter.exportAndShare(context, shoppingItems, listName)
+                                }
+                            )
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            DropdownMenuItem(
+                                text = { Text("Renomear lista") },
+                                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) },
+                                enabled = ready,
+                                onClick = {
+                                    showMenu = false
+                                    showRenameDialog = true
                                 }
                             )
 
                             // Tema: Sistema / Claro / Escuro (o escolhido fica com ✓)
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                            Text(
-                                "Tema",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                            ThemeMenuSection(
+                                themeMode = themeMode,
+                                onSelect = { mode ->
+                                    showMenu = false
+                                    onThemeModeChange(mode)
+                                }
                             )
-                            ThemeMode.values().forEach { mode ->
-                                DropdownMenuItem(
-                                    text = { Text(mode.label) },
-                                    leadingIcon = {
-                                        Icon(
-                                            when (mode) {
-                                                ThemeMode.SYSTEM -> Icons.Default.BrightnessAuto
-                                                ThemeMode.LIGHT -> Icons.Default.LightMode
-                                                ThemeMode.DARK -> Icons.Default.DarkMode
-                                            },
-                                            contentDescription = null
-                                        )
-                                    },
-                                    trailingIcon = {
-                                        if (mode == themeMode) {
-                                            Icon(
-                                                Icons.Default.Check,
-                                                contentDescription = "Selecionado",
-                                                tint = MaterialTheme.colorScheme.primary
-                                            )
-                                        }
-                                    },
-                                    onClick = {
-                                        showMenu = false
-                                        onThemeModeChange(mode)
-                                    }
-                                )
-                            }
                         }
                     }
                 }
@@ -278,7 +282,9 @@ fun MainScreen(
                 modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
             )
 
-            if (shoppingItems.isEmpty()) {
+            if (!ready) {
+                // carregando a lista (é rapidinho)
+            } else if (shoppingItems.isEmpty()) {
                 EmptyState(
                     onType = { openTypeDialog() },
                     onScan = { showScanner = true }
@@ -406,6 +412,20 @@ fun MainScreen(
                 categoryEditItem = null
             },
             onDismiss = { categoryEditItem = null }
+        )
+    }
+
+    if (showRenameDialog) {
+        ListFormDialog(
+            title = "Renomear lista",
+            confirmLabel = "Salvar",
+            initialName = listName,
+            showBudget = false,
+            onConfirm = { name, _ ->
+                if (name.isNotBlank()) viewModel.renameList(listId, name)
+                showRenameDialog = false
+            },
+            onDismiss = { showRenameDialog = false }
         )
     }
 

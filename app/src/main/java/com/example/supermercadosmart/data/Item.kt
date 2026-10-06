@@ -1,9 +1,10 @@
 package com.example.supermercadosmart.data
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "items")
+@Entity(tableName = "items", indices = [Index("listId")])
 data class Item(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
@@ -15,6 +16,8 @@ data class Item(
     val barcode: String? = null,
     /** Chave da categoria (ex.: "LIMPEZA"); veja [Category]. */
     val category: String = Category.OUTROS.name,
+    /** Lista a que o item pertence; veja [ShoppingList]. */
+    val listId: Long = 0,
     val timestamp: Long = System.currentTimeMillis()
 ) {
     val totalPrice: Double

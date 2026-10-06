@@ -5,39 +5,100 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.supermercadosmart.data.AppDatabase
 import com.example.supermercadosmart.data.Category
+import com.example.supermercadosmart.data.DeletedList
 import com.example.supermercadosmart.data.Item
 import com.example.supermercadosmart.data.ItemRepository
+import com.example.supermercadosmart.data.ListContent
+import com.example.supermercadosmart.data.ListSummary
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ShoppingViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repository: ItemRepository
+    private val repository = ItemRepository(AppDatabase.getInstance(application))
 
-    val allItems: StateFlow<List<Item>>
-    val maxBudget: StateFlow<Double>
+    // ---- Tela "Minhas listas" ----
 
-    init {
-        val db = AppDatabase.getInstance(application)
-        repository = ItemRepository(db.itemDao(), db.budgetDao())
+    /** Todas as listas com nº de itens e total. null = ainda carregando. */
+    val lists: StateFlow<List<ListSummary>?> = repository.listSummaries
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-        allItems = repository.allItems.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
+    // ---- Lista aberta ----
 
-        maxBudget = repository.budget
-            .map { settings -> settings?.maxBudget ?: 0.0 }
-            .stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = 0.0
-            )
+    private val _currentListId = MutableStateFlow<Long?>(null)
+
+    /** Lista aberta no momento (null = tela "Minhas listas"). */
+    val currentListId: StateFlow<Long?> = _currentListId.asStateFlow()
+
+    /**
+     * Itens da última lista aberta, junto com o id dela. Ao voltar para "Minhas listas" o
+     * conteúdo continua aqui (a tela da lista sai com animação sem ficar em branco); ao abrir
+     * outra lista, a tela compara o [ListContent.listId] para não mostrar itens da anterior.
+     */
+    val listContent: StateFlow<ListContent?> = _currentListId
+        .filterNotNull()
+        .flatMapLatest { id ->
+            combine(repository.observeList(id), repository.itemsForList(id)) { list, items ->
+                ListContent(listId = id, list = list, items = items)
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Itens da lista aberta (usado pelos "Desfazer" para pegar a versão mais recente do item). */
+    val allItems: StateFlow<List<Item>> = listContent
+        .map { it?.items ?: emptyList() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun openList(listId: Long) {
+        _currentListId.value = listId
     }
+
+    fun closeList() {
+        _currentListId.value = null
+    }
+
+    // ---- Ações nas listas ----
+
+    /** Cria uma lista e já abre ela. */
+    fun createList(name: String, maxBudget: Double) {
+        viewModelScope.launch {
+            val id = repository.createList(name, maxBudget)
+            openList(id)
+        }
+    }
+
+    fun renameList(listId: Long, name: String) {
+        viewModelScope.launch {
+            repository.renameList(listId, name)
+        }
+    }
+
+    fun duplicateList(listId: Long, newName: String) {
+        viewModelScope.launch {
+            repository.duplicateList(listId, newName)
+        }
+    }
+
+    /** Exclui a lista e os itens; devolve o que foi apagado para o "Desfazer". */
+    suspend fun deleteList(listId: Long): DeletedList? = repository.deleteList(listId)
+
+    fun restoreList(deleted: DeletedList) {
+        viewModelScope.launch {
+            repository.restoreList(deleted)
+        }
+    }
+
+    // ---- Itens da lista aberta ----
 
     fun addItem(
         name: String,
@@ -47,6 +108,7 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
         barcode: String? = null,
         category: String = Category.OUTROS.name
     ) {
+        val listId = _currentListId.value ?: return
         viewModelScope.launch {
             repository.insert(
                 Item(
@@ -55,7 +117,8 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
                     quantity = quantity,
                     imageUri = imageUri,
                     barcode = barcode,
-                    category = category
+                    category = category,
+                    listId = listId
                 )
             )
         }
@@ -86,22 +149,26 @@ class ShoppingViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    /** Desfazer exclusão: reinsere o item com o mesmo id e os mesmos dados. */
+    /** Desfazer exclusão: reinsere o item com o mesmo id e os mesmos dados (inclusive a lista). */
     fun restoreItem(item: Item) {
         viewModelScope.launch {
             repository.insert(item)
         }
     }
 
+    /** Esvazia a lista aberta. */
     fun clearAllItems() {
+        val listId = _currentListId.value ?: return
         viewModelScope.launch {
-            repository.clearAll()
+            repository.clearList(listId)
         }
     }
 
+    /** Orçamento da lista aberta. */
     fun setBudget(value: Double) {
+        val listId = _currentListId.value ?: return
         viewModelScope.launch {
-            repository.setBudget(value)
+            repository.setBudget(listId, value)
         }
     }
 

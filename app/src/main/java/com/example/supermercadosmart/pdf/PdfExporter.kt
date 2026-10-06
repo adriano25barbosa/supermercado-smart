@@ -29,8 +29,8 @@ object PdfExporter {
     private val currencyFormat = NumberFormat.getCurrencyInstance(Locale("pt", "BR"))
 
     /** Gera o PDF e abre a tela de compartilhar do Android. */
-    fun exportAndShare(context: Context, items: List<Item>) {
-        val uri = buildPdf(context, items)
+    fun exportAndShare(context: Context, items: List<Item>, listName: String) {
+        val uri = buildPdf(context, items, listName)
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = "application/pdf"
             putExtra(Intent.EXTRA_STREAM, uri)
@@ -40,8 +40,8 @@ object PdfExporter {
     }
 
     /** Gera o PDF e abre num leitor de PDF do celular (se não houver, cai no compartilhar). */
-    fun open(context: Context, items: List<Item>) {
-        val uri = buildPdf(context, items)
+    fun open(context: Context, items: List<Item>, listName: String) {
+        val uri = buildPdf(context, items, listName)
         val viewIntent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(uri, "application/pdf")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -60,7 +60,7 @@ object PdfExporter {
     }
 
     /** Desenha o PDF no cache do app e devolve o endereço (Uri) para abrir ou compartilhar. */
-    private fun buildPdf(context: Context, items: List<Item>): Uri {
+    private fun buildPdf(context: Context, items: List<Item>, listName: String): Uri {
         val pdfDocument = PdfDocument()
         val pageWidth = 595
         val pageHeight = 842
@@ -91,10 +91,11 @@ object PdfExporter {
         var y = 40f
         val marginLeft = 40f
 
-        canvas.drawText("Supermercado Smart — Lista de Compras", marginLeft, y, titlePaint)
+        val title = listName.ifBlank { "Lista de Compras" }.take(45)
+        canvas.drawText(title, marginLeft, y, titlePaint)
         y += 20f
         val dateStr = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date())
-        canvas.drawText("Gerado em: $dateStr", marginLeft, y, subtitlePaint)
+        canvas.drawText("Supermercado Smart · Gerado em: $dateStr", marginLeft, y, subtitlePaint)
         y += 30f
 
         canvas.drawText("✔", marginLeft, y, headerPaint)

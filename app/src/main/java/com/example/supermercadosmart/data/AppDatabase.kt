@@ -8,14 +8,14 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Database(
-    entities = [Item::class, BudgetSettings::class],
-    version = 2,
+    entities = [Item::class, ShoppingList::class],
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun itemDao(): ItemDao
-    abstract fun budgetDao(): BudgetDao
+    abstract fun shoppingListDao(): ShoppingListDao
 
     companion object {
         @Volatile
@@ -47,6 +47,54 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** Nome da lista criada na migração e na primeira instalação. */
+        const val DEFAULT_LIST_NAME = "Minha lista"
+
+        /**
+         * Versão 2 → 3: várias listas, cada uma com o seu orçamento.
+         * Cria a tabela "shopping_lists" com a lista "Minha lista" (id 1), que recebe o
+         * orçamento que já existia e todos os itens atuais. A tabela antiga
+         * "budget_settings" deixa de existir.
+         */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS shopping_lists (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "name TEXT NOT NULL, " +
+                        "maxBudget REAL NOT NULL, " +
+                        "createdAt INTEGER NOT NULL)"
+                )
+                // Orçamento que já existia (se a tabela antiga não estiver lá, fica sem orçamento)
+                var oldBudget = 0.0
+                val hasBudgetTable = db.query(
+                    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'budget_settings'"
+                ).use { it.moveToFirst() }
+                if (hasBudgetTable) {
+                    db.query("SELECT maxBudget FROM budget_settings WHERE id = 1 LIMIT 1").use { cursor ->
+                        if (cursor.moveToFirst()) oldBudget = cursor.getDouble(0)
+                    }
+                }
+                db.execSQL(
+                    "INSERT INTO shopping_lists (id, name, maxBudget, createdAt) VALUES (1, ?, ?, ?)",
+                    arrayOf<Any>(DEFAULT_LIST_NAME, oldBudget, System.currentTimeMillis())
+                )
+                db.execSQL("ALTER TABLE items ADD COLUMN listId INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_items_listId ON items (listId)")
+                db.execSQL("DROP TABLE IF EXISTS budget_settings")
+            }
+        }
+
+        /** Primeira instalação: já começa com uma lista vazia. */
+        private val createDefaultList = object : RoomDatabase.Callback() {
+            override fun onCreate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "INSERT INTO shopping_lists (name, maxBudget, createdAt) VALUES (?, 0, ?)",
+                    arrayOf<Any>(DEFAULT_LIST_NAME, System.currentTimeMillis())
+                )
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -55,7 +103,8 @@ abstract class AppDatabase : RoomDatabase() {
                     "supermercado_smart_db"
                 )
                     // Migrações reais preservam a lista; o fallback só vale se faltar alguma.
-                    .addMigrations(MIGRATION_1_2)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addCallback(createDefaultList)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

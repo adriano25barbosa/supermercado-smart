@@ -11,11 +11,17 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ItemDao {
 
-    @Query("SELECT * FROM items ORDER BY timestamp DESC")
-    fun getAllItems(): Flow<List<Item>>
+    @Query("SELECT * FROM items WHERE listId = :listId ORDER BY timestamp DESC")
+    fun getItemsForList(listId: Long): Flow<List<Item>>
+
+    @Query("SELECT * FROM items WHERE listId = :listId ORDER BY timestamp DESC")
+    suspend fun getItemsForListOnce(listId: Long): List<Item>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(item: Item): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(items: List<Item>)
 
     @Update
     suspend fun update(item: Item)
@@ -23,9 +29,9 @@ interface ItemDao {
     @Delete
     suspend fun delete(item: Item)
 
-    @Query("DELETE FROM items")
-    suspend fun clearAll()
+    @Query("DELETE FROM items WHERE listId = :listId")
+    suspend fun clearList(listId: Long)
 
-    @Query("SELECT * FROM items WHERE barcode = :barcode LIMIT 1")
+    @Query("SELECT * FROM items WHERE barcode = :barcode ORDER BY timestamp DESC LIMIT 1")
     suspend fun findByBarcode(barcode: String): Item?
 }
