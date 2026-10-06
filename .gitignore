@@ -1,0 +1,20 @@
+# Gradle / Android
+.gradle/
+build/
+local.properties
+captures/
+.kotlin/
+*.apk
+
+# IDEs (Android Studio, Antigravity / VS Code)
+.idea/
+*.iml
+.vscode/
+bin/
+.settings/
+.project
+.classpath
+
+# Sistema
+.DS_Store
+Thumbs.db
